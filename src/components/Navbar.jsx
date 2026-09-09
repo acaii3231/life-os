@@ -3,7 +3,7 @@ import {
   LayoutDashboard, 
   Calendar, 
   KanbanSquare, 
-  Network, 
+  BrainCircuit, 
   Wallet, 
   Settings, 
   LogOut, 
@@ -47,7 +47,7 @@ export function Navbar({ activeTab, setActiveTab, lifeLevel, onOpenNotifications
     { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'kanban', label: 'Kanban', icon: KanbanSquare },
-    { id: 'life-builder', label: 'Life Builder', icon: Network },
+    { id: 'mind-map', label: 'Mapa Mental', icon: BrainCircuit },
     { id: 'finance', label: 'Finanças', icon: Wallet },
     { id: 'settings', label: 'Configurações', icon: Settings },
   ];

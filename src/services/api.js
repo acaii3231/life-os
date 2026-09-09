@@ -667,6 +667,138 @@ export const api = {
     }
   },
 
+  // Mapas Mentais (Estilo MindMeister / Cérebro & Ideias)
+  mindMaps: {
+    list: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('mind_maps')
+          .select('*')
+          .eq('user_id', 1)
+          .order('updated_at', { ascending: false });
+
+        if (error) {
+          console.warn('Fallback para local storage (mind_maps):', error.message);
+          const local = localStorage.getItem('life_os_mind_maps');
+          return { maps: local ? JSON.parse(local) : [] };
+        }
+
+        if (data && data.length > 0) {
+          localStorage.setItem('life_os_mind_maps', JSON.stringify(data));
+        }
+        return { maps: data || [] };
+      } catch (e) {
+        const local = localStorage.getItem('life_os_mind_maps');
+        return { maps: local ? JSON.parse(local) : [] };
+      }
+    },
+
+    get: async (id) => {
+      try {
+        const { data, error } = await supabase
+          .from('mind_maps')
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (error) throw error;
+        return { map: data };
+      } catch (e) {
+        const local = localStorage.getItem('life_os_mind_maps');
+        const maps = local ? JSON.parse(local) : [];
+        const found = maps.find(m => String(m.id) === String(id));
+        return { map: found || null };
+      }
+    },
+
+    create: async (data) => {
+      const newMap = {
+        user_id: 1,
+        title: data.title || 'Novo Mapa Mental',
+        description: data.description || '',
+        nodes: data.nodes || [],
+        connections: data.connections || [],
+        theme: data.theme || 'cyber',
+        is_favorite: !!data.is_favorite,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      try {
+        const { data: inserted, error } = await supabase
+          .from('mind_maps')
+          .insert(newMap)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const local = localStorage.getItem('life_os_mind_maps');
+        const maps = local ? JSON.parse(local) : [];
+        maps.unshift(inserted);
+        localStorage.setItem('life_os_mind_maps', JSON.stringify(maps));
+
+        return { map: inserted };
+      } catch (e) {
+        console.warn('Fallback de criação local (mind_maps):', e.message);
+        newMap.id = Date.now();
+        const local = localStorage.getItem('life_os_mind_maps');
+        const maps = local ? JSON.parse(local) : [];
+        maps.unshift(newMap);
+        localStorage.setItem('life_os_mind_maps', JSON.stringify(maps));
+        return { map: newMap };
+      }
+    },
+
+    update: async (id, data) => {
+      const updates = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      delete updates.id;
+      delete updates.user_id;
+
+      try {
+        const { data: updated, error } = await supabase
+          .from('mind_maps')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const local = localStorage.getItem('life_os_mind_maps');
+        if (local) {
+          const maps = JSON.parse(local).map(m => String(m.id) === String(id) ? { ...m, ...updates } : m);
+          localStorage.setItem('life_os_mind_maps', JSON.stringify(maps));
+        }
+
+        return { map: updated };
+      } catch (e) {
+        console.warn('Fallback de atualização local (mind_maps):', e.message);
+        const local = localStorage.getItem('life_os_mind_maps');
+        let maps = local ? JSON.parse(local) : [];
+        maps = maps.map(m => String(m.id) === String(id) ? { ...m, ...updates } : m);
+        localStorage.setItem('life_os_mind_maps', JSON.stringify(maps));
+        return { map: { id, ...updates } };
+      }
+    },
+
+    delete: async (id) => {
+      try {
+        await supabase.from('mind_maps').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Erro ao deletar mapa mental no Supabase:', e.message);
+      }
+      const local = localStorage.getItem('life_os_mind_maps');
+      if (local) {
+        const maps = JSON.parse(local).filter(m => String(m.id) !== String(id));
+        localStorage.setItem('life_os_mind_maps', JSON.stringify(maps));
+      }
+      return { success: true };
+    }
+  },
+
   // Nível de Vida
   lifeLevel: {
     get: async () => {

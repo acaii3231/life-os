@@ -11,7 +11,8 @@ import {
   ArrowRight, 
   AlertCircle,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  BrainCircuit
 } from 'lucide-react';
 import LifeLevelGauge from '../components/LifeLevelGauge';
 
@@ -133,19 +134,22 @@ export function DashboardPage({
           </span>
         </div>
 
-        {/* Metas de Vida */}
-        <div className="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
+        {/* Mapa Mental / Cérebro */}
+        <div 
+          onClick={() => onSelectTab('mind-map')}
+          className="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col justify-between cursor-pointer hover:border-purple-500/30 transition-all"
+        >
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-            <span>Metas no Life Builder</span>
-            <Target className="w-4 h-4 text-purple-400" />
+            <span>Mapa Mental & Ideias</span>
+            <BrainCircuit className="w-4 h-4 text-purple-400" />
           </div>
           <div className="my-2">
-            <span className="text-2xl font-extrabold font-mono tracking-tight text-white">
-              {goals.length}
+            <span className="text-xl font-extrabold font-mono tracking-tight text-purple-300">
+              MEU CÉREBRO
             </span>
           </div>
           <span className="text-[10px] text-slate-500">
-            Curto, médio e longo prazo ativas
+            Estilo MindMeister conectado
           </span>
         </div>
       </section>
@@ -221,16 +225,16 @@ export function DashboardPage({
           </div>
         </div>
 
-        {/* Metas de Vida (Life Builder Preview) */}
+        {/* Mapa Mental / Cérebro Preview */}
         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Target className="w-4 h-4 text-purple-400" />
-              <h3 className="font-bold text-white text-sm">Life Builder (Metas Estratégicas)</h3>
+              <BrainCircuit className="w-4 h-4 text-purple-400" />
+              <h3 className="font-bold text-white text-sm">Mapa Mental (Minha Mente & Ideias)</h3>
             </div>
             <button
-              onClick={() => onSelectTab('life-builder')}
-              className="text-xs text-purple-400 hover:underline flex items-center gap-1"
+              onClick={() => onSelectTab('mind-map')}
+              className="text-xs text-purple-400 hover:underline flex items-center gap-1 font-semibold"
             >
               Abrir Mapa Mental <ArrowRight className="w-3 h-3" />
             </button>

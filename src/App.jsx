@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import DashboardPage from './pages/DashboardPage';
 import AgendaPage from './pages/AgendaPage';
 import KanbanPage from './pages/KanbanPage';
-import LifeBuilderPage from './pages/LifeBuilderPage';
+import MindMapPage from './pages/MindMapPage';
 import FinancePage from './pages/FinancePage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
@@ -137,15 +137,12 @@ export function App() {
           />
         )}
 
-        {activeTab === 'life-builder' && (
-          <LifeBuilderPage
-            goals={goals}
-            links={links}
-            onOpenGoalModal={(g) => {
-              setActiveGoal(g);
-              setIsGoalModalOpen(true);
+        {(activeTab === 'mind-map' || activeTab === 'life-builder') && (
+          <MindMapPage
+            onOpenTaskModal={() => {
+              setActiveTask(null);
+              setIsTaskModalOpen(true);
             }}
-            onRefresh={refreshAllData}
           />
         )}
 
