@@ -57,10 +57,12 @@ export const api = {
     },
 
     get: async (id) => {
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da tarefa inválido para busca');
       const { data: task, error } = await supabase
         .from('tasks')
         .select('*, subtasks(*), media(*)')
-        .eq('id', id)
+        .eq('id', numId)
         .single();
 
       if (error) throw error;
@@ -88,13 +90,13 @@ export const api = {
         .from('tasks')
         .insert({
           user_id: 1,
-          title,
-          description,
-          due_date,
-          due_time,
+          title: title || 'Sem título',
+          description: description || '',
+          due_date: due_date || null,
+          due_time: due_time || null,
           priority,
           status,
-          category,
+          category: category || 'Geral',
           color,
           notify_whatsapp: !!notify_whatsapp
         })
@@ -106,7 +108,7 @@ export const api = {
       if (initial_subtasks && initial_subtasks.length > 0) {
         const subtaskRecords = initial_subtasks.map((sub, idx) => ({
           task_id: task.id,
-          title: typeof sub === 'string' ? sub : sub.title,
+          title: typeof sub === 'string' ? sub : (sub.title || 'Micro-atividade'),
           is_completed: typeof sub === 'object' ? !!sub.is_completed : false,
           position: idx + 1
         }));
@@ -121,6 +123,11 @@ export const api = {
     },
 
     update: async (id, data) => {
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) {
+        throw new Error('ID da tarefa inválido para atualização');
+      }
+
       const updates = { ...data, updated_at: new Date().toISOString() };
       delete updates.id;
       delete updates.user_id;
@@ -133,7 +140,7 @@ export const api = {
       const { data: task, error } = await supabase
         .from('tasks')
         .update(updates)
-        .eq('id', id)
+        .eq('id', numId)
         .select()
         .single();
 
@@ -142,16 +149,20 @@ export const api = {
     },
 
     delete: async (id) => {
-      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da tarefa inválido para exclusão');
+      const { error } = await supabase.from('tasks').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
     },
 
     notify: async (id) => {
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da tarefa inválido para notificação');
       const { data: task, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('id', id)
+        .eq('id', numId)
         .single();
 
       if (error || !task) throw new Error('Tarefa não encontrada');
@@ -162,15 +173,20 @@ export const api = {
   // Subtarefas / Checklists
   subtasks: {
     create: async (taskId, title) => {
+      const numTaskId = parseInt(taskId, 10);
+      if (!numTaskId || isNaN(numTaskId)) {
+        throw new Error('Salve a tarefa antes de adicionar micro-atividades');
+      }
+
       const { count } = await supabase
         .from('subtasks')
         .select('*', { count: 'exact', head: true })
-        .eq('task_id', taskId);
+        .eq('task_id', numTaskId);
 
       const { data: subtask, error } = await supabase
         .from('subtasks')
         .insert({
-          task_id: taskId,
+          task_id: numTaskId,
           title: title.trim(),
           is_completed: false,
           position: (count || 0) + 1
@@ -183,11 +199,13 @@ export const api = {
     },
 
     update: async (id, data) => {
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da subtarefa inválido');
       const updates = { ...data, updated_at: new Date().toISOString() };
       const { data: subtask, error } = await supabase
         .from('subtasks')
         .update(updates)
-        .eq('id', id)
+        .eq('id', numId)
         .select()
         .single();
 
@@ -196,7 +214,9 @@ export const api = {
     },
 
     delete: async (id) => {
-      const { error } = await supabase.from('subtasks').delete().eq('id', id);
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da subtarefa inválido');
+      const { error } = await supabase.from('subtasks').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
     }
@@ -205,6 +225,11 @@ export const api = {
   // Mídias / Anexos
   media: {
     upload: async (taskId, file) => {
+      const numTaskId = parseInt(taskId, 10);
+      if (!numTaskId || isNaN(numTaskId)) {
+        throw new Error('Salve a atividade antes de anexar arquivos.');
+      }
+
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async () => {
@@ -213,7 +238,7 @@ export const api = {
             const { data: media, error } = await supabase
               .from('media')
               .insert({
-                task_id: taskId,
+                task_id: numTaskId,
                 user_id: 1,
                 original_name: file.name,
                 filename: file.name,
@@ -236,7 +261,9 @@ export const api = {
     },
 
     delete: async (id) => {
-      const { error } = await supabase.from('media').delete().eq('id', id);
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID do anexo inválido');
+      const { error } = await supabase.from('media').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
     }
@@ -360,10 +387,13 @@ export const api = {
     },
 
     deleteTransaction: async (id) => {
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da transação inválido');
+
       const { data: tx } = await supabase
         .from('transactions')
         .select('*')
-        .eq('id', id)
+        .eq('id', numId)
         .single();
 
       if (!tx) throw new Error('Transação não encontrada');
@@ -381,7 +411,7 @@ export const api = {
         }
       }
 
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
+      const { error } = await supabase.from('transactions').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
     }
@@ -432,6 +462,9 @@ export const api = {
     },
 
     update: async (id, data) => {
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da meta inválido');
+
       const updates = { ...data, updated_at: new Date().toISOString() };
       delete updates.id;
       delete updates.user_id;
@@ -439,7 +472,7 @@ export const api = {
       const { data: goal, error } = await supabase
         .from('life_goals')
         .update(updates)
-        .eq('id', id)
+        .eq('id', numId)
         .select()
         .single();
 
@@ -448,7 +481,9 @@ export const api = {
     },
 
     delete: async (id) => {
-      const { error } = await supabase.from('life_goals').delete().eq('id', id);
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID da meta inválido');
+      const { error } = await supabase.from('life_goals').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
     },
@@ -469,7 +504,9 @@ export const api = {
     },
 
     deleteLink: async (id) => {
-      const { error } = await supabase.from('life_goal_links').delete().eq('id', id);
+      const numId = parseInt(id, 10);
+      if (!numId || isNaN(numId)) throw new Error('ID do vínculo inválido');
+      const { error } = await supabase.from('life_goal_links').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
     }
