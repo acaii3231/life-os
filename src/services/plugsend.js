@@ -2,9 +2,9 @@ import { supabase } from './supabase.js';
 
 export class PlugSendService {
   /**
-   * Recupera as configurações da API Plugsend para o usuário
+   * Recupera configurações do Plugsend do usuário
    */
-  static async getUserSettings(userId) {
+  static async getUserSettings(userId = 1) {
     const { data, error } = await supabase
       .from('settings')
       .select('key, value')
@@ -37,20 +37,20 @@ export class PlugSendService {
   }
 
   /**
-   * Dispara uma mensagem via WhatsApp (Plugsend ou Simulação)
+   * Dispara mensagem via WhatsApp (Plugsend ou Simulação)
    */
-  static async sendMessage(userId, { phone, message, taskId = null }) {
+  static async sendMessage(userId = 1, { phone, message, taskId = null }) {
     const settings = await this.getUserSettings(userId);
     const targetPhone = phone || settings.phone;
 
-    // Se estiver em modo de simulação ou sem token real configurado
+    // Se estiver em modo de simulação ou sem token configurado
     if (settings.simulationMode || !settings.token) {
       console.log(`\n================= [WHATSAPP PLUGSEND - SIMULAÇÃO] =================`);
       console.log(`📱 Para: ${targetPhone}`);
       console.log(`💬 Mensagem:\n${message}`);
       console.log(`===================================================================\n`);
 
-      const { data: log, error: logError } = await supabase
+      const { data: log } = await supabase
         .from('notification_logs')
         .insert({
           user_id: userId,
@@ -58,7 +58,7 @@ export class PlugSendService {
           recipient: targetPhone,
           message: message,
           status: 'simulated',
-          error_message: !settings.token ? 'Modo simulação (sem token de API configurado)' : 'Modo Sandbox ativo'
+          error_message: !settings.token ? 'Modo simulação (sem token de API)' : 'Modo Sandbox ativo'
         })
         .select()
         .single();
@@ -68,11 +68,11 @@ export class PlugSendService {
         simulated: true,
         logId: log?.id,
         recipient: targetPhone,
-        message: 'Alerta disparado com sucesso no modo Sandbox/Simulação'
+        message: 'Alerta gerado com sucesso no modo Sandbox/Simulação'
       };
     }
 
-    // Modo de produção: Disparo real via API REST do Plugsend
+    // Modo de produção: Chamada REST à API do Plugsend
     try {
       const endpoint = `${settings.apiUrl.replace(/\/$/, '')}/v1/messages`;
       
@@ -143,10 +143,9 @@ export class PlugSendService {
   }
 
   /**
-   * Monta e dispara alerta inteligente de atividade
+   * Dispara alerta de tarefa
    */
-  static async sendTaskAlert(userId, task, trigger = 'vencimento') {
-    // Buscar subtarefas para incluir resumo no WhatsApp
+  static async sendTaskAlert(userId = 1, task, trigger = 'vencimento') {
     const { data: subtasks } = await supabase
       .from('subtasks')
       .select('*')
@@ -203,9 +202,9 @@ ${task.description ? `📝 *Detalhes:* ${task.description}\n` : ''}
   }
 
   /**
-   * Dispara mensagem de teste para o usuário
+   * Envia mensagem de teste
    */
-  static async sendTestMessage(userId, customPhone) {
+  static async sendTestMessage(userId = 1, customPhone) {
     const message =
 `*══════ [LIFE OS] ══════*
 🤖 *TESTE DE INTEGRAÇÃO PLUGSEND*
