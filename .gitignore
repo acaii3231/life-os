@@ -1,0 +1,30 @@
+# Dependências
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Compilação / Build
+dist/
+client/dist/
+
+# Variáveis de ambiente sensíveis
+.env
+server/.env
+.env.local
+.env.*.local
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Uploads de teste (mantendo pasta)
+server/src/uploads/*
+!server/src/uploads/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
