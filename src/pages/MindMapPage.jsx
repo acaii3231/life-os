@@ -550,39 +550,63 @@ export function MindMapPage({ onOpenTaskModal }) {
     });
   };
 
-  const handleMouseMove = (e) => {
-    if (isPanning) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y
-      });
-      return;
-    }
+  // Sincronização de movimento ultra-fluida (Zero Latência com requestAnimationFrame)
+  useEffect(() => {
+    if (!isPanning && !draggingNodeId) return;
 
-    if (draggingNodeId) {
-      const dx = (e.clientX - dragNodeOffset.startX) / zoom;
-      const dy = (e.clientY - dragNodeOffset.startY) / zoom;
+    let rafId = null;
 
-      setNodes(prev => prev.map(n => {
-        if (n.id === draggingNodeId) {
-          return {
-            ...n,
-            x: Math.round(dragNodeOffset.nodeStartX + dx),
-            y: Math.round(dragNodeOffset.nodeStartY + dy)
-          };
-        }
-        return n;
-      }));
-    }
-  };
+    const onWindowMouseMove = (e) => {
+      if (isPanning) {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          setPan({
+            x: e.clientX - panStart.x,
+            y: e.clientY - panStart.y
+          });
+        });
+        return;
+      }
 
-  const handleMouseUp = () => {
-    if (isPanning) setIsPanning(false);
-    if (draggingNodeId) {
-      setDraggingNodeId(null);
-      scheduleAutoSave(nodes);
-    }
-  };
+      if (draggingNodeId) {
+        const dx = (e.clientX - dragNodeOffset.startX) / zoom;
+        const dy = (e.clientY - dragNodeOffset.startY) / zoom;
+        const targetX = Math.round(dragNodeOffset.nodeStartX + dx);
+        const targetY = Math.round(dragNodeOffset.nodeStartY + dy);
+
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          setNodes(prev => prev.map(n => {
+            if (n.id === draggingNodeId) {
+              return { ...n, x: targetX, y: targetY };
+            }
+            return n;
+          }));
+        });
+      }
+    };
+
+    const onWindowMouseUp = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      if (isPanning) setIsPanning(false);
+      if (draggingNodeId) {
+        setDraggingNodeId(null);
+        setNodes(latest => {
+          scheduleAutoSave(latest);
+          return latest;
+        });
+      }
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove, { passive: true });
+    window.addEventListener('mouseup', onWindowMouseUp);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+    };
+  }, [isPanning, panStart, draggingNodeId, dragNodeOffset, zoom]);
 
   const handleWheel = (e) => {
     e.preventDefault();
@@ -677,7 +701,6 @@ export function MindMapPage({ onOpenTaskModal }) {
             strokeWidth={!parent.parentId ? "3.5" : "2.2"}
             strokeOpacity={isBranchSelected ? "1" : "0.75"}
             strokeLinecap="round"
-            className="transition-all duration-300"
           />
         </g>
       );
@@ -853,8 +876,6 @@ export function MindMapPage({ onOpenTaskModal }) {
       <div
         ref={canvasRef}
         onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
         onWheel={handleWheel}
         className="relative flex-1 w-full h-full overflow-hidden cursor-grab active:cursor-grabbing canvas-bg bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px]"
       >
@@ -862,7 +883,8 @@ export function MindMapPage({ onOpenTaskModal }) {
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             transformOrigin: '0 0',
-            transition: isPanning || draggingNodeId ? 'none' : 'transform 0.1s ease-out'
+            transition: 'none',
+            willChange: 'transform'
           }}
           className="absolute left-0 top-0 w-0 h-0 pointer-events-none"
         >
@@ -892,7 +914,8 @@ export function MindMapPage({ onOpenTaskModal }) {
                 }}
                 style={{
                   transform: `translate(${node.x}px, ${node.y}px) translate(-50%, -50%)`,
-                  borderColor: node.color || '#10b981'
+                  borderColor: node.color || '#10b981',
+                  willChange: 'transform'
                 }}
                 className={`absolute pointer-events-auto group cursor-pointer transition-shadow select-none ${
                   isRoot
