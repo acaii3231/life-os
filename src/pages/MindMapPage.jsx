@@ -19,7 +19,9 @@ import {
   ArrowRight, 
   CheckSquare, 
   Copy, 
-  X
+  X,
+  Link2,
+  Unlink
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -88,6 +90,8 @@ export function MindMapPage({ onOpenTaskModal }) {
   const [mapsList, setMapsList] = useState([]);
   const [currentMap, setCurrentMap] = useState(null);
   const [nodes, setNodes] = useState([]);
+  const [connections, setConnections] = useState([]); // Interligações cruzadas entre blocos
+  const [connectingSourceId, setConnectingSourceId] = useState(null); // ID do nó de origem da interligação
   
   // Estados de navegação no canvas
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -156,8 +160,11 @@ export function MindMapPage({ onOpenTaskModal }) {
   const selectMap = (map) => {
     setCurrentMap(map);
     const rawNodes = Array.isArray(map.nodes) ? map.nodes : [];
+    const rawConnections = Array.isArray(map.connections) ? map.connections : [];
     setNodes(rawNodes);
+    setConnections(rawConnections);
     setSelectedNodeId(rawNodes.find(n => !n.parentId)?.id || rawNodes[0]?.id || null);
+    setConnectingSourceId(null);
     setSaveStatus('saved');
     centerView();
   };
@@ -179,7 +186,7 @@ export function MindMapPage({ onOpenTaskModal }) {
   }, [editingNodeId]);
 
   // 4. Agendar salvamento automático (Debounced 1.2s)
-  const scheduleAutoSave = (updatedNodes, updatedMap = currentMap) => {
+  const scheduleAutoSave = (updatedNodes = nodes, updatedConnections = connections, updatedMap = currentMap) => {
     setSaveStatus('unsaved');
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
@@ -188,7 +195,8 @@ export function MindMapPage({ onOpenTaskModal }) {
       setSaveStatus('saving');
       try {
         await api.mindMaps.update(updatedMap.id, {
-          nodes: updatedNodes
+          nodes: updatedNodes,
+          connections: updatedConnections
         });
         setSaveStatus('saved');
       } catch (err) {
@@ -204,7 +212,8 @@ export function MindMapPage({ onOpenTaskModal }) {
     setSaveStatus('saving');
     try {
       await api.mindMaps.update(currentMap.id, {
-        nodes: nodes
+        nodes: nodes,
+        connections: connections
       });
       setSaveStatus('saved');
     } catch (err) {
@@ -383,11 +392,32 @@ export function MindMapPage({ onOpenTaskModal }) {
     collectChildren(nodeId);
 
     const updated = nodes.filter(n => !idsToDelete.has(n.id));
+    const updatedConns = connections.filter(c => !idsToDelete.has(c.from) && !idsToDelete.has(c.to));
     setNodes(updated);
+    setConnections(updatedConns);
     setSelectedNodeId(node.parentId);
     setEditingNodeId(null);
     setIsDetailsOpen(false);
-    scheduleAutoSave(updated);
+    scheduleAutoSave(updated, updatedConns);
+  };
+
+  // Excluir uma interligação cruzada
+  const handleDeleteConnection = (connId) => {
+    const updated = connections.filter(c => c.id !== connId);
+    setConnections(updated);
+    scheduleAutoSave(nodes, updated);
+  };
+
+  // Editar rótulo da interligação cruzada
+  const handleEditConnectionLabel = (connId) => {
+    const conn = connections.find(c => c.id === connId);
+    if (!conn) return;
+    const currentLabel = conn.label || '';
+    const newLabel = prompt('Rótulo da interligação (ex: "Gera", "Depende de", "Alimenta"):', currentLabel);
+    if (newLabel === null) return;
+    const updated = connections.map(c => c.id === connId ? { ...c, label: newLabel.trim() } : c);
+    setConnections(updated);
+    scheduleAutoSave(nodes, updated);
   };
 
   const handleStartEdit = (node) => {
@@ -529,6 +559,10 @@ export function MindMapPage({ onOpenTaskModal }) {
 
   const handleCanvasMouseDown = (e) => {
     if (e.target !== canvasRef.current && !e.target.classList.contains('canvas-bg')) return;
+    if (connectingSourceId) {
+      setConnectingSourceId(null);
+      return;
+    }
     setIsPanning(true);
     setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     setSelectedNodeId(null);
@@ -538,6 +572,36 @@ export function MindMapPage({ onOpenTaskModal }) {
 
   const handleNodeMouseDown = (e, node) => {
     e.stopPropagation();
+
+    // Se estiver no Modo de Interligação
+    if (connectingSourceId) {
+      if (connectingSourceId === node.id) {
+        setConnectingSourceId(null);
+        return;
+      }
+
+      // Verificar se conexão já existe entre esses nós
+      const alreadyLinked = connections.some(
+        c => (c.from === connectingSourceId && c.to === node.id) ||
+             (c.from === node.id && c.to === connectingSourceId)
+      );
+
+      if (!alreadyLinked) {
+        const newConnection = {
+          id: `conn_${Date.now()}`,
+          from: connectingSourceId,
+          to: node.id,
+          label: '',
+          color: '#06b6d4'
+        };
+        const updated = [...connections, newConnection];
+        setConnections(updated);
+        scheduleAutoSave(nodes, updated);
+      }
+      setConnectingSourceId(null);
+      return;
+    }
+
     setSelectedNodeId(node.id);
     setActivePicker(null);
     setDraggingNodeId(node.id);
@@ -642,9 +706,13 @@ export function MindMapPage({ onOpenTaskModal }) {
         const node = nodes.find(n => n.id === selectedNodeId);
         if (node) handleStartEdit(node);
       } else if (e.key === 'Escape') {
-        setSelectedNodeId(null);
-        setActivePicker(null);
-        setIsDetailsOpen(false);
+        if (connectingSourceId) {
+          setConnectingSourceId(null);
+        } else {
+          setSelectedNodeId(null);
+          setActivePicker(null);
+          setIsDetailsOpen(false);
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleManualSave();
@@ -653,7 +721,7 @@ export function MindMapPage({ onOpenTaskModal }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, nodes, editingNodeId, editingText, currentMap]);
+  }, [selectedNodeId, nodes, editingNodeId, editingText, currentMap, connectingSourceId]);
 
   // Renderização de conexões curvas Bézier orgânicas
   const renderConnections = () => {
@@ -702,6 +770,87 @@ export function MindMapPage({ onOpenTaskModal }) {
             strokeOpacity={isBranchSelected ? "1" : "0.75"}
             strokeLinecap="round"
           />
+        </g>
+      );
+    });
+
+    // 2. Interligações Cruzadas entre Blocos
+    connections.forEach(conn => {
+      const source = nodes.find(n => n.id === conn.from);
+      const target = nodes.find(n => n.id === conn.to);
+      if (!source || !target) return;
+
+      const sx = source.x;
+      const sy = source.y;
+      const tx = target.x;
+      const ty = target.y;
+
+      const dx = tx - sx;
+      const dy = ty - sy;
+      const dist = Math.hypot(dx, dy) || 1;
+
+      // Curvatura perpendicular elegante para a seta
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      const curveAmount = Math.min(65, Math.max(30, dist * 0.2));
+      const cx = (sx + tx) / 2 + nx * curveAmount;
+      const cy = (sy + ty) / 2 + ny * curveAmount;
+
+      const pathData = `M ${sx} ${sy} Q ${cx} ${cy} ${tx} ${ty}`;
+      const strokeColor = conn.color || '#06b6d4';
+
+      lines.push(
+        <g key={`cross_${conn.id}`} className="group/conn pointer-events-auto">
+          {/* Linha curva tracejada com seta */}
+          <path
+            d={pathData}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="2.5"
+            strokeDasharray="6 4"
+            markerEnd="url(#arrow-cyan)"
+            strokeOpacity="0.85"
+            className="cursor-pointer hover:stroke-[4px] transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEditConnectionLabel(conn.id);
+            }}
+          />
+
+          {/* Badge Interativo no Ponto Médio com Rótulo e Botão de Excluir */}
+          <foreignObject
+            x={cx - 60}
+            y={cy - 14}
+            width="120"
+            height="32"
+            className="overflow-visible pointer-events-auto"
+          >
+            <div className="flex items-center justify-center gap-1 group/btn">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditConnectionLabel(conn.id);
+                }}
+                className="px-2.5 py-0.5 rounded-full bg-dark-950/95 border border-cyan-500/50 text-[10px] font-bold text-cyan-300 shadow-xl backdrop-blur hover:bg-cyan-500/20 flex items-center gap-1 transition-all"
+                title="Clique para editar rótulo do vínculo"
+              >
+                <Link2 className="w-2.5 h-2.5 text-cyan-400" />
+                <span className="max-w-[75px] truncate">{conn.label || 'Vínculo'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteConnection(conn.id);
+                }}
+                className="w-4 h-4 rounded-full bg-rose-500/90 hover:bg-rose-500 text-white flex items-center justify-center text-[11px] font-bold opacity-0 group-hover/btn:opacity-100 transition-opacity shadow-md"
+                title="Excluir interligação"
+              >
+                ×
+              </button>
+            </div>
+          </foreignObject>
         </g>
       );
     });
@@ -879,6 +1028,22 @@ export function MindMapPage({ onOpenTaskModal }) {
         onWheel={handleWheel}
         className="relative flex-1 w-full h-full overflow-hidden cursor-grab active:cursor-grabbing canvas-bg bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px]"
       >
+        {/* Banner Flutuante de Modo de Interligação Ativo */}
+        {connectingSourceId && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-950/95 border border-cyan-400/50 text-cyan-200 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-3 z-40 backdrop-blur-md animate-in fade-in slide-in-from-top-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <span className="text-xs font-bold">
+              Clique em outro bloco para criar uma interligação
+            </span>
+            <button
+              onClick={() => setConnectingSourceId(null)}
+              className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all"
+            >
+              Cancelar (ESC)
+            </button>
+          </div>
+        )}
+
         <div
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -888,11 +1053,24 @@ export function MindMapPage({ onOpenTaskModal }) {
           }}
           className="absolute left-0 top-0 w-0 h-0 pointer-events-none"
         >
-          {/* Camada SVG para as Conexões Curvas Orgânicas Bézier */}
+          {/* Camada SVG para as Conexões Curvas Orgânicas Bézier e Interligações */}
           <svg
             className="overflow-visible pointer-events-none absolute left-0 top-0"
             style={{ width: 1, height: 1 }}
           >
+            <defs>
+              <marker
+                id="arrow-cyan"
+                viewBox="0 0 10 10"
+                refX="7"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#06b6d4" />
+              </marker>
+            </defs>
             {renderConnections()}
           </svg>
 
@@ -925,6 +1103,12 @@ export function MindMapPage({ onOpenTaskModal }) {
                           ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-dark-950 shadow-2xl scale-105' 
                           : 'hover:border-opacity-100 hover:scale-[1.02]'
                       }`
+                } ${
+                  connectingSourceId === node.id 
+                    ? 'ring-4 ring-cyan-400 ring-offset-2 ring-offset-dark-950 animate-pulse' 
+                    : connectingSourceId 
+                      ? 'hover:ring-2 hover:ring-cyan-400 hover:border-cyan-400 cursor-crosshair' 
+                      : ''
                 }`}
               >
                 <span className={isRoot ? 'text-xl' : 'text-sm'}>
@@ -995,6 +1179,23 @@ export function MindMapPage({ onOpenTaskModal }) {
             >
               <ArrowRight className="w-3.5 h-3.5" />
               <span>+ Irmão (Enter)</span>
+            </button>
+
+            {/* Botão Interligar Blocos */}
+            <button
+              onClick={() => {
+                setConnectingSourceId(connectingSourceId === selectedNode.id ? null : selectedNode.id);
+                setActivePicker(null);
+              }}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                connectingSourceId === selectedNode.id
+                  ? 'bg-cyan-500 text-dark-950 border-cyan-400 font-extrabold shadow-glow-cyan animate-pulse'
+                  : 'bg-dark-950 hover:bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+              }`}
+              title="Interligar este bloco com qualquer outro bloco do mapa"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>{connectingSourceId === selectedNode.id ? 'Conectando...' : 'Interligar'}</span>
             </button>
 
             <div className="w-px h-5 bg-white/10 mx-1"></div>
