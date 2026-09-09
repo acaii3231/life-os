@@ -81,13 +81,43 @@ export class PlugSendService {
       };
     }
 
-    // Modo de produção: Chamada à API do Plugsend com a Instância
+    // Modo de produção: Tentar via Serverless API Proxy (/api/whatsapp) para evitar bloqueios de CORS e SSL no navegador
     try {
       const cleanPhone = targetPhone.replace(/\D/g, '');
       const baseUrl = settings.apiUrl.replace(/\/$/, '');
       const instance = settings.instance || 'plugsend-6281948';
 
-      // Tenta rota com instância do Plugsend (padrão /message/sendText/:instance)
+      // 1. Tenta rota /api/whatsapp (Vercel Serverless Function)
+      const proxyResponse = await fetch('/api/whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          message: message,
+          taskId: taskId,
+          host: baseUrl,
+          instance: instance,
+          token: settings.token
+        })
+      }).catch(() => null);
+
+      if (proxyResponse) {
+        const proxyData = await proxyResponse.json().catch(() => ({}));
+        if (proxyResponse.ok && proxyData.success) {
+          return {
+            success: true,
+            simulated: false,
+            recipient: targetPhone,
+            message: proxyData.message || 'Mensagem enviada com sucesso via Plugsend WhatsApp!'
+          };
+        } else {
+          throw new Error(proxyData.message || proxyData.error || `HTTP ${proxyResponse.status}`);
+        }
+      }
+
+      // 2. Fallback direto (caso esteja rodando em dev server local sem proxy Vercel)
       const primaryEndpoint = `${baseUrl}/message/sendText/${instance}`;
       const payload = {
         number: cleanPhone,
@@ -113,7 +143,6 @@ export class PlugSendService {
         body: JSON.stringify(payload)
       }).catch(() => null);
 
-      // Se endpoint primário não respondeu ou retornou 404, tenta endpoint alternativo /v1/messages
       if (!response || !response.ok) {
         const fallbackEndpoint = `${baseUrl}/v1/messages`;
         const fallbackResponse = await fetch(fallbackEndpoint, {

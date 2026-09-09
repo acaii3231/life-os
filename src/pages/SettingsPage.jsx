@@ -240,6 +240,43 @@ export function SettingsPage({ onOpenNotifications }) {
         </div>
       </form>
 
+      {/* Webhook do Life OS para o Plugsend */}
+      <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-3">
+        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <div className="flex items-center gap-2 text-cyber-blue">
+            <Globe className="w-5 h-5" />
+            <h3 className="font-bold text-white text-base">URL do Webhook (Plugsend WhatsApp)</h3>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+            Ativo
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-400">
+          Se o seu painel do Plugsend solicitar uma <strong>URL de Webhook</strong> para enviar o status das mensagens, relatórios de entrega ou respostas, utilize o endereço abaixo:
+        </p>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            readOnly
+            value={typeof window !== 'undefined' ? `${window.location.origin}/api/webhook` : 'https://seu-dominio.vercel.app/api/webhook'}
+            className="flex-1 bg-dark-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-cyber-blue font-mono select-all focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}/api/webhook`;
+              navigator.clipboard.writeText(url);
+              alert('URL do Webhook copiada para a área de transferência:\n' + url);
+            }}
+            className="px-4 py-2 rounded-xl bg-dark-900 hover:bg-dark-800 border border-white/10 text-xs font-bold text-white transition-all hover:border-cyber-blue/40"
+          >
+            Copiar URL
+          </button>
+        </div>
+      </div>
+
       {/* Informações do Banco de Dados Relacional Supabase */}
       <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
         <div className="flex items-center gap-2 text-cyan-400 border-b border-white/5 pb-3">
