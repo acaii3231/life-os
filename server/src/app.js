@@ -89,15 +89,18 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/life-level', lifeLevelRoutes);
 
-// Servir frontend compilado (client/dist) se existir (para execução standalone local)
+// Servir frontend compilado se existir (para execução standalone local)
+const rootDistPath = path.join(__dirname, '../../dist');
 const clientDistPath = path.join(__dirname, '../../client/dist');
-if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
+const finalDist = fs.existsSync(rootDistPath) ? rootDistPath : (fs.existsSync(clientDistPath) ? clientDistPath : null);
+
+if (finalDist) {
+  app.use(express.static(finalDist));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
       return next();
     }
-    res.sendFile(path.join(clientDistPath, 'index.html'));
+    res.sendFile(path.join(finalDist, 'index.html'));
   });
 }
 
