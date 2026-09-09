@@ -414,6 +414,161 @@ export const api = {
       const { error } = await supabase.from('transactions').delete().eq('id', numId);
       if (error) throw error;
       return { success: true };
+    },
+
+    // Gerenciamento de Categorias de Finanças
+    getCategories: async () => {
+      const defaultExpense = [
+        'Moradia',
+        'Alimentação',
+        'Transporte',
+        'Saúde',
+        'Tecnologia',
+        'Educação',
+        'Lazer',
+        'Investimentos',
+        'Outros'
+      ];
+      const defaultIncome = [
+        'Salário / Faturamento',
+        'Consultoria',
+        'Investimentos',
+        'Vendas',
+        'Dividendos',
+        'Outros'
+      ];
+
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('key, value')
+          .eq('user_id', 1)
+          .in('key', ['finance_expense_categories', 'finance_income_categories']);
+
+        if (error) throw error;
+
+        let expense = defaultExpense;
+        let income = defaultIncome;
+
+        if (data && data.length > 0) {
+          data.forEach(item => {
+            if (item.key === 'finance_expense_categories') {
+              try {
+                const parsed = JSON.parse(item.value);
+                if (Array.isArray(parsed) && parsed.length > 0) expense = parsed;
+              } catch (e) {}
+            }
+            if (item.key === 'finance_income_categories') {
+              try {
+                const parsed = JSON.parse(item.value);
+                if (Array.isArray(parsed) && parsed.length > 0) income = parsed;
+              } catch (e) {}
+            }
+          });
+        }
+
+        return { expense, income };
+      } catch (err) {
+        console.error('Erro ao buscar categorias:', err);
+        return { expense: defaultExpense, income: defaultIncome };
+      }
+    },
+
+    saveCategories: async ({ expense, income }) => {
+      const entries = [];
+      if (expense) {
+        entries.push({
+          user_id: 1,
+          key: 'finance_expense_categories',
+          value: JSON.stringify(expense),
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (income) {
+        entries.push({
+          user_id: 1,
+          key: 'finance_income_categories',
+          value: JSON.stringify(income),
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      for (const entry of entries) {
+        await supabase.from('settings').upsert(entry, { onConflict: 'user_id,key' });
+      }
+
+      return { success: true };
+    },
+
+    renameCategory: async ({ oldName, newName, type }) => {
+      const trimmedNew = (newName || '').trim();
+      const trimmedOld = (oldName || '').trim();
+      if (!trimmedNew) throw new Error('O novo nome da categoria não pode ser vazio');
+      if (trimmedOld === trimmedNew) return { success: true };
+
+      const categories = await api.finance.getCategories();
+      const targetList = type === 'income' ? [...categories.income] : [...categories.expense];
+      const index = targetList.indexOf(trimmedOld);
+      if (index !== -1) {
+        targetList[index] = trimmedNew;
+      } else if (!targetList.includes(trimmedNew)) {
+        targetList.push(trimmedNew);
+      }
+
+      if (type === 'income') {
+        await api.finance.saveCategories({ income: targetList });
+      } else {
+        await api.finance.saveCategories({ expense: targetList });
+      }
+
+      // Atualiza também todas as transações que usavam o nome antigo
+      await supabase
+        .from('transactions')
+        .update({ category: trimmedNew })
+        .eq('category', trimmedOld)
+        .eq('user_id', 1);
+
+      return { success: true };
+    },
+
+    deleteCategory: async ({ name, type }) => {
+      const trimmedName = (name || '').trim();
+      const categories = await api.finance.getCategories();
+      const targetList = type === 'income' ? [...categories.income] : [...categories.expense];
+      const updatedList = targetList.filter(c => c !== trimmedName);
+
+      if (type === 'income') {
+        await api.finance.saveCategories({ income: updatedList });
+      } else {
+        await api.finance.saveCategories({ expense: updatedList });
+      }
+
+      return { success: true };
+    },
+
+    resetCategories: async () => {
+      const defaultExpense = [
+        'Moradia',
+        'Alimentação',
+        'Transporte',
+        'Saúde',
+        'Tecnologia',
+        'Educação',
+        'Lazer',
+        'Investimentos',
+        'Outros'
+      ];
+      const defaultIncome = [
+        'Salário / Faturamento',
+        'Consultoria',
+        'Investimentos',
+        'Vendas',
+        'Dividendos',
+        'Outros'
+      ];
+
+      await api.finance.saveCategories({ expense: defaultExpense, income: defaultIncome });
+      return { expense: defaultExpense, income: defaultIncome };
     }
   },
 
@@ -531,8 +686,9 @@ export const api = {
 
       const map = {
         plugsend_api_url: 'https://api.plugsend.com',
-        plugsend_token: '',
-        plugsend_phone: '5511999999999',
+        plugsend_instance: 'plugsend-6281948',
+        plugsend_token: '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
+        plugsend_phone: '',
         plugsend_simulation_mode: 'false',
         notify_due_tasks: 'true',
         notify_critical_tasks: 'true'

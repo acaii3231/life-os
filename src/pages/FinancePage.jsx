@@ -10,7 +10,8 @@ import {
   PieChart as PieIcon, 
   BarChart3,
   Search,
-  Filter
+  Filter,
+  Tag
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -25,6 +26,7 @@ import {
   Legend 
 } from 'recharts';
 import api from '../services/api';
+import CategoryModal from '../components/CategoryModal';
 
 export function FinancePage({ 
   financeSummary = {}, 
@@ -35,6 +37,7 @@ export function FinancePage({
 }) {
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   const metrics = financeSummary.metrics || {};
   const totalIncome = metrics.totalIncome || 0;
@@ -254,6 +257,15 @@ export function FinancePage({
             </select>
 
             <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-dark-950 border border-white/10 hover:border-cyber-blue/50 text-slate-200 text-xs font-semibold hover:bg-white/5 transition-all flex items-center gap-1.5"
+              title="Personalizar categorias de receitas e despesas"
+            >
+              <Tag className="w-3.5 h-3.5 text-cyber-blue" />
+              <span>Categorias</span>
+            </button>
+
+            <button
               onClick={onOpenTransactionModal}
               className="px-3.5 py-1.5 rounded-xl bg-cyber-blue text-dark-950 text-xs font-bold hover:bg-sky-400 transition-all flex items-center gap-1.5 shadow-glow-cyan"
             >
@@ -332,6 +344,13 @@ export function FinancePage({
           </table>
         </div>
       </div>
+
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoriesUpdated={onRefresh}
+        transactions={transactions}
+      />
     </div>
   );
 }

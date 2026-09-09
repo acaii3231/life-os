@@ -19,9 +19,10 @@ import api from '../services/api';
 export function SettingsPage({ onOpenNotifications }) {
   const [settings, setSettings] = useState({
     plugsend_api_url: 'https://api.plugsend.com',
-    plugsend_token: '',
-    plugsend_phone: '5511999999999',
-    plugsend_simulation_mode: 'true',
+    plugsend_instance: 'plugsend-6281948',
+    plugsend_token: '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
+    plugsend_phone: '',
+    plugsend_simulation_mode: 'false',
     notify_due_tasks: 'true',
     notify_critical_tasks: 'true'
   });
@@ -147,6 +148,20 @@ export function SettingsPage({ onOpenNotifications }) {
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5 text-slate-500" />
+              Nome da Instância Plugsend
+            </label>
+            <input
+              type="text"
+              value={settings.plugsend_instance || ''}
+              onChange={(e) => setSettings({ ...settings, plugsend_instance: e.target.value })}
+              placeholder="ex: plugsend-6281948"
+              className="w-full bg-dark-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:border-emerald-500 font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
               <Smartphone className="w-3.5 h-3.5 text-slate-500" />
               Telefone Destino (com DDI e DDD)
             </label>
@@ -159,7 +174,7 @@ export function SettingsPage({ onOpenNotifications }) {
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
               <Key className="w-3.5 h-3.5 text-slate-500" />
               Token / Chave de API Plugsend
@@ -171,9 +186,6 @@ export function SettingsPage({ onOpenNotifications }) {
               placeholder="Cole seu token de autenticação Plugsend..."
               className="w-full bg-dark-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:border-emerald-500 font-mono"
             />
-            <span className="text-[10px] text-slate-500 mt-1 block">
-              Se deixado em branco ou se o modo simulação estiver ativo, os alertas serão gerados em Sandbox com log auditável.
-            </span>
           </div>
         </div>
 

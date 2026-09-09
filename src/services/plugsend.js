@@ -28,9 +28,10 @@ export class PlugSendService {
 
     return {
       apiUrl: map.plugsend_api_url || 'https://api.plugsend.com',
-      token: map.plugsend_token || '',
-      phone: map.plugsend_phone || '5511999999999',
-      simulationMode: map.plugsend_simulation_mode !== 'false',
+      instance: map.plugsend_instance || 'plugsend-6281948',
+      token: map.plugsend_token || '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
+      phone: map.plugsend_phone || '',
+      simulationMode: map.plugsend_simulation_mode === 'true',
       notifyDueTasks: map.notify_due_tasks !== 'false',
       notifyCriticalTasks: map.notify_critical_tasks !== 'false'
     };
@@ -41,7 +42,15 @@ export class PlugSendService {
    */
   static async sendMessage(userId = 1, { phone, message, taskId = null }) {
     const settings = await this.getUserSettings(userId);
-    const targetPhone = phone || settings.phone;
+    const targetPhone = (phone || settings.phone || '').trim();
+
+    if (!targetPhone) {
+      return {
+        success: false,
+        simulated: false,
+        message: 'Nenhum número de telefone configurado para envio de WhatsApp'
+      };
+    }
 
     // Se estiver em modo de simulação ou sem token configurado
     if (settings.simulationMode || !settings.token) {
@@ -72,33 +81,60 @@ export class PlugSendService {
       };
     }
 
-    // Modo de produção: Chamada REST à API do Plugsend
+    // Modo de produção: Chamada à API do Plugsend com a Instância
     try {
-      const endpoint = `${settings.apiUrl.replace(/\/$/, '')}/v1/messages`;
-      
+      const cleanPhone = targetPhone.replace(/\D/g, '');
+      const baseUrl = settings.apiUrl.replace(/\/$/, '');
+      const instance = settings.instance || 'plugsend-6281948';
+
+      // Tenta rota com instância do Plugsend (padrão /message/sendText/:instance)
+      const primaryEndpoint = `${baseUrl}/message/sendText/${instance}`;
       const payload = {
-        number: targetPhone.replace(/\D/g, ''),
-        message: message,
+        number: cleanPhone,
         options: {
           delay: 1200,
           presence: 'composing'
-        }
+        },
+        textMessage: {
+          text: message
+        },
+        text: message
       };
 
-      const response = await fetch(endpoint, {
+      const headers = {
+        'Content-Type': 'application/json',
+        'apikey': settings.token,
+        'Authorization': `Bearer ${settings.token}`
+      };
+
+      let response = await fetch(primaryEndpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.token}`,
-          'apikey': settings.token
-        },
+        headers,
         body: JSON.stringify(payload)
-      });
+      }).catch(() => null);
 
-      const responseData = await response.json().catch(() => ({}));
+      // Se endpoint primário não respondeu ou retornou 404, tenta endpoint alternativo /v1/messages
+      if (!response || !response.ok) {
+        const fallbackEndpoint = `${baseUrl}/v1/messages`;
+        const fallbackResponse = await fetch(fallbackEndpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            number: cleanPhone,
+            instance: instance,
+            message: message
+          })
+        }).catch(() => null);
 
-      if (!response.ok) {
-        throw new Error(responseData.message || responseData.error || `HTTP ${response.status}`);
+        if (fallbackResponse && fallbackResponse.ok) {
+          response = fallbackResponse;
+        }
+      }
+
+      const responseData = response ? await response.json().catch(() => ({})) : {};
+
+      if (!response || !response.ok) {
+        throw new Error(responseData.message || responseData.error || (response ? `HTTP ${response.status}` : 'Falha de conexão com servidor Plugsend'));
       }
 
       const { data: log } = await supabase
@@ -118,7 +154,7 @@ export class PlugSendService {
         simulated: false,
         logId: log?.id,
         recipient: targetPhone,
-        message: 'Mensagem enviada com sucesso via API Plugsend'
+        message: 'Mensagem enviada com sucesso via Plugsend WhatsApp!'
       };
     } catch (err) {
       console.error('Erro ao enviar via Plugsend API:', err.message);

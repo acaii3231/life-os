@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, Tag, Target, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
+import { X, DollarSign, Calendar, Tag, Target, ArrowUpRight, ArrowDownRight, Loader2, Settings } from 'lucide-react';
 import api from '../services/api';
+import CategoryModal from './CategoryModal';
 
 export function TransactionModal({ isOpen, onClose, onTransactionSaved, goals = [] }) {
   if (!isOpen) return null;
@@ -13,14 +14,35 @@ export function TransactionModal({ isOpen, onClose, onTransactionSaved, goals = 
   const [goalId, setGoalId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const expenseCategories = ['Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Tecnologia', 'Educação', 'Lazer', 'Investimentos', 'Outros'];
-  const incomeCategories = ['Salário / Faturamento', 'Consultoria', 'Investimentos', 'Vendas', 'Dividendos', 'Outros'];
+  const [expenseCategories, setExpenseCategories] = useState([
+    'Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Tecnologia', 'Educação', 'Lazer', 'Investimentos', 'Outros'
+  ]);
+  const [incomeCategories, setIncomeCategories] = useState([
+    'Salário / Faturamento', 'Consultoria', 'Investimentos', 'Vendas', 'Dividendos', 'Outros'
+  ]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await api.finance.getCategories();
+      if (res.expense && res.expense.length > 0) setExpenseCategories(res.expense);
+      if (res.income && res.income.length > 0) setIncomeCategories(res.income);
+    } catch (err) {
+      console.error('Erro ao carregar categorias no modal:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, [isOpen]);
 
   const categories = type === 'income' ? incomeCategories : expenseCategories;
 
   useEffect(() => {
-    setCategory(categories[0]);
-  }, [type]);
+    if (categories && categories.length > 0 && !categories.includes(category)) {
+      setCategory(categories[0]);
+    }
+  }, [type, categories]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -117,7 +139,18 @@ export function TransactionModal({ isOpen, onClose, onTransactionSaved, goals = 
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Categoria</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">Categoria</label>
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="text-[10px] text-cyber-blue hover:text-sky-300 flex items-center gap-0.5 font-semibold transition-colors"
+                  title="Personalizar categorias"
+                >
+                  <Tag className="w-3 h-3" />
+                  <span>Editar</span>
+                </button>
+              </div>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -184,6 +217,12 @@ export function TransactionModal({ isOpen, onClose, onTransactionSaved, goals = 
           </div>
         </form>
       </div>
+
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoriesUpdated={fetchCategories}
+      />
     </div>
   );
 }
