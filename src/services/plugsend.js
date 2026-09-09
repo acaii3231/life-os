@@ -12,10 +12,11 @@ export class PlugSendService {
 
     if (error || !data) {
       return {
-        apiUrl: 'https://api.plugsend.com',
-        token: '',
-        phone: '5511999999999',
-        simulationMode: true,
+        apiUrl: 'https://plugsend.uazapi.com',
+        instance: 'plugsend-6281948',
+        token: '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
+        phone: '5564996272330',
+        simulationMode: false,
         notifyDueTasks: true,
         notifyCriticalTasks: true
       };
@@ -27,7 +28,7 @@ export class PlugSendService {
     });
 
     return {
-      apiUrl: map.plugsend_api_url || 'https://api.plugsend.com',
+      apiUrl: map.plugsend_api_url || 'https://plugsend.uazapi.com',
       instance: map.plugsend_instance || 'plugsend-6281948',
       token: map.plugsend_token || '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
       phone: map.plugsend_phone || '',
@@ -35,6 +36,29 @@ export class PlugSendService {
       notifyDueTasks: map.notify_due_tasks !== 'false',
       notifyCriticalTasks: map.notify_critical_tasks !== 'false'
     };
+  }
+
+  /**
+   * Consulta status de conexão da instância PlugSend
+   */
+  static async checkStatus(userId = 1) {
+    const settings = await this.getUserSettings(userId);
+    try {
+      const res = await fetch('/api/whatsapp', { method: 'GET' }).catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json();
+        return json.data || json;
+      }
+
+      // Fallback direto
+      const baseUrl = settings.apiUrl.replace(/\/$/, '');
+      const directRes = await fetch(`${baseUrl}/instance/status`, {
+        headers: { 'token': settings.token }
+      });
+      return await directRes.json();
+    } catch (e) {
+      return { error: e.message };
+    }
   }
 
   /**
@@ -81,11 +105,14 @@ export class PlugSendService {
       };
     }
 
-    // Modo de produção: Tentar via Serverless API Proxy (/api/whatsapp) para evitar bloqueios de CORS e SSL no navegador
+    // Modo de produção: Tentar via Serverless API Proxy (/api/whatsapp) da Vercel
     try {
-      const cleanPhone = targetPhone.replace(/\D/g, '');
+      // Normalização oficial PlugSend: grupo e canal passam intactos, número privado vira só dígitos
+      const targetNumber = (targetPhone.includes('@g.us') || targetPhone.includes('@newsletter'))
+        ? targetPhone
+        : targetPhone.replace(/\D/g, '');
+
       const baseUrl = settings.apiUrl.replace(/\/$/, '');
-      const instance = settings.instance || 'plugsend-6281948';
 
       // 1. Tenta rota /api/whatsapp (Vercel Serverless Function)
       const proxyResponse = await fetch('/api/whatsapp', {
@@ -94,11 +121,10 @@ export class PlugSendService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          phone: cleanPhone,
+          phone: targetNumber,
           message: message,
           taskId: taskId,
           host: baseUrl,
-          instance: instance,
           token: settings.token
         })
       }).catch(() => null);
@@ -109,7 +135,7 @@ export class PlugSendService {
           return {
             success: true,
             simulated: false,
-            recipient: targetPhone,
+            recipient: targetNumber,
             message: proxyData.message || 'Mensagem enviada com sucesso via Plugsend WhatsApp!'
           };
         } else {
@@ -117,53 +143,25 @@ export class PlugSendService {
         }
       }
 
-      // 2. Fallback direto (caso esteja rodando em dev server local sem proxy Vercel)
-      const primaryEndpoint = `${baseUrl}/message/sendText/${instance}`;
-      const payload = {
-        number: cleanPhone,
-        options: {
-          delay: 1200,
-          presence: 'composing'
-        },
-        textMessage: {
-          text: message
-        },
-        text: message
-      };
-
-      const headers = {
-        'Content-Type': 'application/json',
-        'apikey': settings.token,
-        'Authorization': `Bearer ${settings.token}`
-      };
-
-      let response = await fetch(primaryEndpoint, {
+      // 2. Fallback direto oficial: POST https://plugsend.uazapi.com/send/text
+      const endpoint = `${baseUrl}/send/text`;
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      }).catch(() => null);
+        headers: {
+          'Content-Type': 'application/json',
+          'token': settings.token
+        },
+        body: JSON.stringify({
+          number: targetNumber,
+          text: message,
+          linkPreview: true
+        })
+      });
 
-      if (!response || !response.ok) {
-        const fallbackEndpoint = `${baseUrl}/v1/messages`;
-        const fallbackResponse = await fetch(fallbackEndpoint, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            number: cleanPhone,
-            instance: instance,
-            message: message
-          })
-        }).catch(() => null);
+      const responseData = await response.json().catch(() => ({}));
 
-        if (fallbackResponse && fallbackResponse.ok) {
-          response = fallbackResponse;
-        }
-      }
-
-      const responseData = response ? await response.json().catch(() => ({})) : {};
-
-      if (!response || !response.ok) {
-        throw new Error(responseData.message || responseData.error || (response ? `HTTP ${response.status}` : 'Falha de conexão com servidor Plugsend'));
+      if (!response.ok) {
+        throw new Error(responseData.message || responseData.error || `HTTP ${response.status}`);
       }
 
       const { data: log } = await supabase
@@ -171,7 +169,7 @@ export class PlugSendService {
         .insert({
           user_id: userId,
           task_id: taskId,
-          recipient: targetPhone,
+          recipient: targetNumber,
           message: message,
           status: 'sent'
         })
@@ -182,7 +180,7 @@ export class PlugSendService {
         success: true,
         simulated: false,
         logId: log?.id,
-        recipient: targetPhone,
+        recipient: targetNumber,
         message: 'Mensagem enviada com sucesso via Plugsend WhatsApp!'
       };
     } catch (err) {

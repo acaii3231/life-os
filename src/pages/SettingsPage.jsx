@@ -10,15 +10,18 @@ import {
   Smartphone, 
   Globe, 
   CheckCircle2, 
-  Loader2,
-  Lock,
-  Cpu
+  Loader2, 
+  Lock, 
+  Cpu, 
+  Wifi, 
+  WifiOff 
 } from 'lucide-react';
 import api from '../services/api';
+import PlugSendService from '../services/plugsend';
 
 export function SettingsPage({ onOpenNotifications }) {
   const [settings, setSettings] = useState({
-    plugsend_api_url: 'https://api.plugsend.com',
+    plugsend_api_url: 'https://plugsend.uazapi.com',
     plugsend_instance: 'plugsend-6281948',
     plugsend_token: '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
     plugsend_phone: '',
@@ -31,6 +34,7 @@ export function SettingsPage({ onOpenNotifications }) {
   const [saving, setSaving] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [liveStatus, setLiveStatus] = useState(null); // { connected: boolean, profileName: string, owner: string }
 
   useEffect(() => {
     loadSettings();
@@ -43,10 +47,31 @@ export function SettingsPage({ onOpenNotifications }) {
       if (res.settings) {
         setSettings(prev => ({ ...prev, ...res.settings }));
       }
+      checkLiveStatus();
     } catch (err) {
       console.error('Erro ao carregar configurações:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkLiveStatus = async () => {
+    try {
+      const statusRes = await PlugSendService.checkStatus();
+      if (statusRes?.status?.connected || statusRes?.instance?.status === 'connected') {
+        setLiveStatus({
+          connected: true,
+          profileName: statusRes.instance?.profileName || 'Hugo',
+          owner: statusRes.instance?.owner || statusRes.status?.jid?.split('@')[0] || 'Conectado'
+        });
+      } else {
+        setLiveStatus({
+          connected: false,
+          error: statusRes?.error || 'Instância desconectada no painel PlugSend'
+        });
+      }
+    } catch (e) {
+      setLiveStatus({ connected: false, error: e.message });
     }
   };
 
@@ -57,6 +82,7 @@ export function SettingsPage({ onOpenNotifications }) {
     try {
       await api.settings.update(settings);
       setFeedback({ success: true, message: 'Configurações salvas com sucesso!' });
+      checkLiveStatus();
     } catch (err) {
       setFeedback({ success: false, message: 'Erro ao salvar: ' + err.message });
     } finally {
@@ -104,10 +130,32 @@ export function SettingsPage({ onOpenNotifications }) {
 
       {/* Seção Plugsend WhatsApp */}
       <form onSubmit={handleSave} className="glass-panel p-6 rounded-2xl border border-white/5 space-y-5">
-        <div className="flex items-center justify-between border-b border-white/5 pb-4">
-          <div className="flex items-center gap-2 text-emerald-400">
-            <MessageSquare className="w-5 h-5" />
-            <h3 className="font-bold text-white text-base">Integração WhatsApp (API Plugsend)</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-4 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-white text-base">Integração WhatsApp (API Plugsend)</h3>
+                {liveStatus && (
+                  liveStatus.connected ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Online ({liveStatus.profileName || 'Hugo'})
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                      <WifiOff className="w-3 h-3" />
+                      Offline
+                    </span>
+                  )
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Disparos diretos de tarefas, alertas críticos e sincronização instantânea
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -135,13 +183,13 @@ export function SettingsPage({ onOpenNotifications }) {
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
               <Globe className="w-3.5 h-3.5 text-slate-500" />
-              URL Base da API Plugsend
+              URL Base da API Plugsend (UAZAPI Oficial)
             </label>
             <input
               type="url"
               value={settings.plugsend_api_url}
               onChange={(e) => setSettings({ ...settings, plugsend_api_url: e.target.value })}
-              placeholder="https://api.plugsend.com"
+              placeholder="https://plugsend.uazapi.com"
               className="w-full bg-dark-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:border-emerald-500"
             />
           </div>

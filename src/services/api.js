@@ -685,7 +685,7 @@ export const api = {
       if (error) throw error;
 
       const map = {
-        plugsend_api_url: 'https://api.plugsend.com',
+        plugsend_api_url: 'https://plugsend.uazapi.com',
         plugsend_instance: 'plugsend-6281948',
         plugsend_token: '77d9de98-6e8a-44f6-9996-cc11f1196fa7',
         plugsend_phone: '',
